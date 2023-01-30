@@ -1,0 +1,27 @@
+name: PyTest
+
+on:
+  push:
+
+env:
+  COLUMNS: 120
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Get Python Version from File
+        id: python_version
+        run: echo "version=$(cat VERSION)" >> $GITHUB_OUTPUT
+
+      - uses: actions/setup-python@v3
+        with:
+          python-version: ${{ steps.python_version.outputs.version }}
+
+      - name: Install Dependencies
+        run: make install
+
+      - name: Run Tests
+        run: make pytest

@@ -1,0 +1,24 @@
+name: Mypy testing
+
+on:
+  push:
+
+jobs:
+  mypy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Get Python Version from File
+        id: python_version
+        run: echo "version=$(cat VERSION)" >> $GITHUB_OUTPUT
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: ${{ steps.python_version.outputs.version }}
+
+      - name: Install Dependencies
+        run: make install
+
+      - name: Test Typing
+        run: make mypy_check
