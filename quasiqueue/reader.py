@@ -34,7 +34,10 @@ async def reader_runner(
 
     ctx = None
     if context:
-        ctx = context()
+        if inspect.iscoroutinefunction(context):
+            ctx = await context()
+        else:
+            ctx = context()
 
     while not shutdown_event.is_set() and parent_process.is_alive():
         try:

@@ -23,13 +23,13 @@ import asyncio
 
 from quasiqueue import QuasiQueue
 
-def writer(desired_items: int):
+async def writer(desired_items: int):
   """Feeds data to the Queue when it is low.
   """
   return xrange(0, desired_items)
 
 
-def reader(identifier: int|str):
+async def reader(identifier: int|str):
   """Receives individual items from the queue.
 
   Args:
@@ -130,7 +130,7 @@ The first argument when initilizing QuasiQueue is the name of the queue. This is
 The reader function is called once per item in the queue.
 
 ```python
-def reader(identifier: int|str):
+async def reader(identifier: int|str):
   """Receives individual items from the queue.
 
   Args:
@@ -141,14 +141,16 @@ def reader(identifier: int|str):
 
 The reader can be extremely simple, as this one liner shows, or it can be extremely complex.
 
+The reader can be asynchronous or synchronous. Since each reader runs in its own process there is no performance benefits to using async, but it does make it easier for projects that use a lot of async code to reuse their existing async libraries inside of the reader.
+
 ### Writer
 
-The write function is called whenever the Queue is low. It has to return an iterator of items that can be pickles (strings, integers, or sockets are common examples) that will be feed to the Reader. Generators are a great option to reduce memory usage, but even simple lists can be returned.
+The write function is called whenever the Queue is low. It has to return an iterator of items that can be pickles (strings, integers, or sockets are common examples) that will be feed to the Reader. Generators are a great option to reduce memory usage, but even simple lists can be returned. The writer function has to be asynchronous.
 
 The writer function only has one argument- the desired number of items that QuasiQueue would like to retrieve and add to the Queue. This number is meant to allow for optimization on behalf of the developers- it can be completely ignored, but QuasiQueue will run more efficiently if you keep it as close the desired_items as possible.
 
 ```python
-def writer(desired_items: int):
+async def writer(desired_items: int):
   """Feeds data to the Queue when it is low.
   """
   return xrange(0, desired_items)
@@ -163,7 +165,7 @@ QuasiQueue will prevent items that were recently placed in the Queue from being 
 
 The context function is completely optional. It runs once, and only once, when a new reader process is launched. It is used to initialize resources such as database pools so they can be reused between reader calls.
 
-If the function is provided it should return a dictionary. The reader function will need to have a context argument, which will be the results from the context function.
+If the function is provided it should return a dictionary. The reader function will need to have a context argument, which will be the results from the context function. The context function can be asynchronous or synchronous.
 
 ```python
 
