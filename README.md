@@ -199,17 +199,17 @@ Although this function is not required it can have amazing performance implicati
 
 QuasiQueue has a variety of optimization settings that can be tweaked depending on usage.
 
-|            Name           |  Type |                                                   Description                                                   |Default|Required|
-|---------------------------|-------|-----------------------------------------------------------------------------------------------------------------|-------|--------|
-|  `empty_queue_sleep_time` | string|          The time in seconds that QuasiQueue will sleep the writer process when it returns no results.          | "1.0" |   No   |
-|  `full_queue_sleep_time`  | string|        The time in seconds that QuasiQueue will sleep the writer process if the queue is completely full.       | "5.0" |   No   |
-|`graceful_shutdown_timeout`| string|   The time in seconds that QuasiQueue will wait for readers to finish when it is asked to gracefully shutdown.  |  "30" |   No   |
-|    `lookup_block_size`    |integer|The default desired_items passed to the writer function. This will be adjusted lower depending on queue dynamics.|   10  |   No   |
-|   `max_jobs_per_process`  |integer|               The number of jobs a reader process will run before it is replaced by a new process.              |  200  |   No   |
-|      `max_queue_size`     |integer|                                        The max allowed six of the queue.                                        |  300  |   No   |
-|      `num_processes`      |integer|                                      The number of reader processes to run.                                     |   2   |   No   |
-|  `prevent_requeuing_time` | string|               The time in seconds that an item will be prevented from being readded to the queue.               | "300" |   No   |
-|`queue_interaction_timeout`| string|               The time QuasiQueue will wait for the Queue to be unlocked before throwing an error.              | "0.01"|   No   |
+|            Name           |  Type |                                                   Description                                                   |Default|
+|---------------------------|-------|-----------------------------------------------------------------------------------------------------------------|-------|
+|  `empty_queue_sleep_time` |  float|          The time in seconds that QuasiQueue will sleep the writer process when it returns no results.          |  1.0  |
+|  `full_queue_sleep_time`  |  float|        The time in seconds that QuasiQueue will sleep the writer process if the queue is completely full.       |  5.0  |
+|`graceful_shutdown_timeout`|integer|   The time in seconds that QuasiQueue will wait for readers to finish when it is asked to gracefully shutdown.  |   30  |
+|    `lookup_block_size`    |integer|The default desired_items passed to the writer function. This will be adjusted lower depending on queue dynamics.|   10  |
+|   `max_jobs_per_process`  |integer|               The number of jobs a reader process will run before it is replaced by a new process.              |  200  |
+|      `max_queue_size`     |integer|                                        The max allowed six of the queue.                                        |  300  |
+|      `num_processes`      |integer|                                      The number of reader processes to run.                                     |   2   |
+|  `prevent_requeuing_time` |integer|               The time in seconds that an item will be prevented from being readded to the queue.               |  300  |
+|`queue_interaction_timeout`|  float|               The time QuasiQueue will wait for the Queue to be unlocked before throwing an error.              |  0.01 |
 
 Settings can be configured programmatically, via environment variables, or both.
 
