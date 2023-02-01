@@ -75,7 +75,6 @@ class QueueRunner(object):
             try:
                 processes: List[mp.Process] = []
                 while not shutdown_event.is_set():
-
                     # Prune dead processes
                     processes = [x for x in processes if x.is_alive()]
 
