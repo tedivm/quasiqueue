@@ -26,7 +26,7 @@ from quasiqueue import QuasiQueue
 async def writer(desired_items: int):
   """Feeds data to the Queue when it is low.
   """
-  return xrange(0, desired_items)
+  return range(0, desired_items)
 
 
 async def reader(identifier: int|str):
@@ -147,13 +147,13 @@ The reader can be asynchronous or synchronous. Since each reader runs in its own
 
 The write function is called whenever the Queue is low. It has to return an iterator of items that can be pickles (strings, integers, or sockets are common examples) that will be feed to the Reader. Generators are a great option to reduce memory usage, but even simple lists can be returned. The writer function has to be asynchronous.
 
-The writer function only has one argument- the desired number of items that QuasiQueue would like to retrieve and add to the Queue. This number is meant to allow for optimization on behalf of the developers- it can be completely ignored, but QuasiQueue will run more efficiently if you keep it as close the desired_items as possible.
+The writer function only has one argument- the desired number of items that QuasiQueue would like to retrieve and add to the Queue. This number is meant to allow for optimization on behalf of the developers- it can be completely ignored, but QuasiQueue will run more efficiently if you keep it as close the `desired_items` as possible.
 
 ```python
 async def writer(desired_items: int):
   """Feeds data to the Queue when it is low.
   """
-  return xrange(0, desired_items)
+  return range(0, desired_items)
 
 ```
 
@@ -208,7 +208,7 @@ QuasiQueue has a variety of optimization settings that can be tweaked depending 
 |`graceful_shutdown_timeout`|integer|   The time in seconds that QuasiQueue will wait for readers to finish when it is asked to gracefully shutdown.  |   30  |
 |    `lookup_block_size`    |integer|The default desired_items passed to the writer function. This will be adjusted lower depending on queue dynamics.|   10  |
 |   `max_jobs_per_process`  |integer|               The number of jobs a reader process will run before it is replaced by a new process.              |  200  |
-|      `max_queue_size`     |integer|                                        The max allowed six of the queue.                                        |  300  |
+|      `max_queue_size`     |integer|                                       The max allowed size of the queue.                                        |  300  |
 |      `num_processes`      |integer|                                      The number of reader processes to run.                                     |   2   |
 |  `prevent_requeuing_time` |integer|               The time in seconds that an item will be prevented from being readded to the queue.               |  300  |
 |`queue_interaction_timeout`|  float|               The time QuasiQueue will wait for the Queue to be unlocked before throwing an error.              |  0.01 |
