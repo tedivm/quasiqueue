@@ -145,7 +145,7 @@ The reader can be asynchronous or synchronous. Since each reader runs in its own
 
 ### Writer
 
-The write function is called whenever the Queue is low. It has to return an iterator of items that can be pickles (strings, integers, or sockets are common examples) that will be feed to the Reader. Generators are a great option to reduce memory usage, but even simple lists can be returned. The writer function has to be asynchronous.
+The write function is called whenever the Queue is low. It has to return an iterator of items that can be pickled (strings, integers, or sockets are common examples) that will be feed to the Reader. Generators are a great option to reduce memory usage, but even simple lists can be returned. The writer function has to be asynchronous.
 
 The writer function only has one argument- the desired number of items that QuasiQueue would like to retrieve and add to the Queue. This number is meant to allow for optimization on behalf of the developers- it can be completely ignored, but QuasiQueue will run more efficiently if you keep it as close the `desired_items` as possible.
 
