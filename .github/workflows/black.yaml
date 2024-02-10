@@ -9,13 +9,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Get Python Version from File
-        id: python_version
-        run: echo "version=$(cat VERSION)" >> $GITHUB_OUTPUT
-
       - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ steps.python_version.outputs.version }}
 
       - name: Install Dependencies
         run: make install

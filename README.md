@@ -241,12 +241,11 @@ This method is simple, but the downside is that you lose the environment variabl
 
 ```python
 from quasiqueue import Settings, QuasiQueue
+from pydantic_settings import SettingsConfigDict
 
 class MySettings(Settings)
+  model_config = SettingsConfigDict(env_prefix="MY_QUEUE_")
   lookup_block_size: int = 50
-
-  class Config:
-    prefix="MY_QUEUE_"
 
 QuasiQueue(
   "MyQueue",

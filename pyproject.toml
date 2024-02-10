@@ -1,29 +1,52 @@
 [build-system]
-requires = ["setuptools>=61.0", "versioneer>=0.25"]
 build-backend = "setuptools.build_meta"
+requires = ["setuptools>=67.0", "setuptools_scm[toml]>=7.1"]
 
-[tool.isort]
-profile = "black"
-skip = [".venv"]
-src_paths = ["quasiqueue", "tests"]
+[project]
+authors = [{"name" = "Robert Hafner"}]
+dependencies = [
+  "psutil",
+  "pydantic~=2.0",
+  "pydantic-settings",
+  "typer>=0.9.0",
+]
+description = "A Simple High Performance Multiprocess Queue"
+dynamic = ["version"]
+license = {"file" = "LICENSE"}
+name = "quasiqueue"
+readme = {file = "README.md", content-type = "text/markdown"}
 
-[tool.black]
-exclude = '''
-(
-  /(
-      \.eggs         # exclude a few common directories in the
-    | \.git          # root of the project
-    | \.hg
-    | \.mypy_cache
-    | \.tox
-    | \.venv
-    | \.env
-    | _build
-    | buck-out
-    | build
-    | dist
-  )
-)
-'''
+[project.optional-dependencies]
+dev = [
+  "build",
+  "dapperdata",
+  "glom",
+  "mypy",
+  "pytest",
+  "pytest-cov",
+  "pytest-pretty",
+  "ruamel.yaml",
+  "ruff",
+  "toml-sort",
+  "types-psutil",
+]
+
+[project.scripts]
+quasiqueue = "quasiqueue.cli:app"
+
+[tool.ruff]
+exclude = [".venv", "./quasiqueue/_version.py"]
 line-length = 120
-target-version = ['py38', 'py39', 'py310', 'py311']
+
+[tool.setuptools.dynamic]
+readme = {file = ["README.md"]}
+
+[tool.setuptools.package-data]
+quasiqueue = ["py.typed"]
+
+[tool.setuptools.packages]
+find = {}
+
+[tool.setuptools_scm]
+fallback_version = "0.0.0-dev"
+write_to = "quasiqueue/_version.py"
