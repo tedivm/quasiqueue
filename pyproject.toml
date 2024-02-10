@@ -14,6 +14,7 @@ description = "A Simple High Performance Multiprocess Queue"
 dynamic = ["version"]
 license = {"file" = "LICENSE"}
 name = "quasiqueue"
+python = ">=3.10"
 readme = {file = "README.md", content-type = "text/markdown"}
 
 [project.optional-dependencies]
