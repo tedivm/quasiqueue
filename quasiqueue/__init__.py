@@ -1,5 +1,5 @@
 try:
-    from . import _version
+    from . import _version  # type: ignore
 
     __version__ = _version.__version__
 except:  # noqa: E722

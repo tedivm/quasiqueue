@@ -13,8 +13,13 @@ env:
 jobs:
   pypi:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - uses: actions/setup-python@v5
 
@@ -28,5 +33,3 @@ jobs:
       - name: Publish package
         if: ${{ env.PUBLISH_TO_PYPI == 'true' && github.event_name == 'push' && startsWith(github.ref, 'refs/tags')}}
         uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          password: ${{ secrets.PYPI_PUBLISH_API_KEY }}
