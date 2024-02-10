@@ -1,10 +1,10 @@
-name: Mypy testing
+name: Ruff Validation
 
 on:
   push:
 
 jobs:
-  mypy:
+  ruff:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,5 +14,5 @@ jobs:
       - name: Install Dependencies
         run: make install
 
-      - name: Test Typing
-        run: make mypy_check
+      - name: Test Formatting
+        run: make ruff_check

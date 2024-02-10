@@ -43,21 +43,24 @@ pip: $(PYTHON_VENV)
 $(PACKAGE_CHECK): $(PYTHON_VENV)
 	$(PYTHON) -m pip install -e .[dev]
 
+.PHONY: pre-commit
+pre-commit:
+	pre-commit install
 
 #
 # Formatting
 #
 
-.PHONY: pretty
-pretty: black_fixes isort_fixes dapperdata_fixes
+.PHONY: chores
+chores: ruff_fixes black_fixes dapperdata_fixes
+
+.PHONY: ruff_fixes
+ruff_fixes:
+	$(PYTHON) -m ruff . --fix
 
 .PHONY: black_fixes
 black_fixes:
-	$(PYTHON) -m black .
-
-.PHONY: isort_fixes
-isort_fixes:
-	$(PYTHON) -m isort .
+	$(PYTHON) -m ruff format .
 
 .PHONY: dapperdata_fixes
 dapperdata_fixes:
@@ -69,7 +72,7 @@ dapperdata_fixes:
 #
 
 .PHONY: tests
-tests: install pytest isort_check black_check mypy_check dapperdata_check
+tests: install pytest ruff_check black_check mypy_check dapperdata_check
 
 .PHONY: pytest
 pytest:
@@ -79,13 +82,13 @@ pytest:
 pytest_loud:
 	$(PYTHON) -m pytest -s --cov=./${PACKAGE_SLUG} --cov-report=term-missing tests
 
-.PHONY: isort_check
-isort_check:
-	$(PYTHON) -m isort --check-only .
+.PHONY: ruff_check
+ruff_check:
+	$(PYTHON) -m ruff check
 
 .PHONY: black_check
 black_check:
-	$(PYTHON) -m black . --check
+	$(PYTHON) -m ruff format . --check
 
 .PHONY: mypy_check
 mypy_check:

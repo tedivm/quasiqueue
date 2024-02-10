@@ -45,14 +45,14 @@ class QueueRunner(object):
 
             # Inline function to implicitly pass through shutdown_event.
             def shutdown(a=None, b=None):
-                if a != None:
+                if a is not None:
                     logging.debug(f"Signal {a} caught.")
 
                 # Send shutdown signal to all processes.
                 shutdown_event.set()
 
                 # Graceful shutdown- wait for children to shut down.
-                if a == 15 or a == None:
+                if a == 15 or a is None:
                     logging.debug("Gracefully shutting down child processes.")
                     shutdown_start = time.time()
                     while len(psutil.Process().children()) > 0:

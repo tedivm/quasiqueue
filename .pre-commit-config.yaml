@@ -1,0 +1,23 @@
+repos:
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: make pytest
+        language: system
+        pass_filenames: false
+      - id: ruff
+        name: ruff
+        entry: make ruff_check
+        language: system
+        pass_filenames: false
+      - id: black
+        name: black
+        entry: make black_check
+        language: system
+        pass_filenames: false
+      - id: mypy
+        name: mypy
+        entry: make mypy_check
+        language: system
+        pass_filenames: false

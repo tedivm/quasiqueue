@@ -1,7 +1,9 @@
-from ._version import get_versions
+try:
+    from . import _version
 
-__version__ = get_versions()["version"]
-del get_versions
+    __version__ = _version.__version__
+except:  # noqa: E722
+    __version__ = "0.0.0-dev"
 
-from .runner import QueueRunner as QuasiQueue
-from .settings import Settings
+from .runner import QueueRunner as QuasiQueue  # noqa: F401
+from .settings import Settings  # noqa: F401

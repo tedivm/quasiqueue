@@ -13,7 +13,6 @@ class Builder:
         self.closed = False
 
     async def populate(self, max=50):
-
         self.clean_history()
 
         # Writers can be expensive but cheaper when pulling bulk records.
@@ -45,13 +44,12 @@ class Builder:
                     successful_adds += 1
                     if successful_adds >= max:
                         return True
-        except Full as e:
+        except Full:
             logging.debug("Queue has reached max size.")
             return False
 
     def add_to_queue(self, id):
         if id in self.last_queued:
-
             logging.debug(f"ID {id} is in last_queued")
             logging.debug(time.time())
             logging.debug(self.last_queued[id] + self.settings.prevent_requeuing_time)
