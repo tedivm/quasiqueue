@@ -23,10 +23,13 @@ import asyncio
 
 from quasiqueue import QuasiQueue
 
+
 async def writer(desired: int):
   """Feeds data to the Queue when it is low.
   """
-  return range(0, desired)
+  for x in range(0, desired):
+    yield x
+
 
 
 async def reader(identifier: int|str):
@@ -44,7 +47,8 @@ runner = QuasiQueue(
   writer=writer,
 )
 
-asyncio.run(runner.main())
+if __name__ == '__main__':
+  asyncio.run(runner.main())
 ```
 
 ## Use Cases
