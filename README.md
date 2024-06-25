@@ -23,10 +23,10 @@ import asyncio
 
 from quasiqueue import QuasiQueue
 
-async def writer(desired_items: int):
+async def writer(desired: int):
   """Feeds data to the Queue when it is low.
   """
-  return range(0, desired_items)
+  return range(0, desired)
 
 
 async def reader(identifier: int|str):
@@ -123,7 +123,7 @@ pip install quasiqueue
 
 ### Name
 
-The first argument when initilizing QuasiQueue is the name of the queue. This is used when naming new processes (which makes logging and `ps` commands a lot more useful)
+The first argument when initializing QuasiQueue is the name of the queue. This is used when naming new processes (which makes logging and `ps` commands a lot more useful)
 
 ### Reader
 
@@ -147,13 +147,13 @@ The reader can be asynchronous or synchronous. Since each reader runs in its own
 
 The write function is called whenever the Queue is low. It has to return an iterator of items that can be pickled (strings, integers, or sockets are common examples) that will be feed to the Reader. Generators are a great option to reduce memory usage, but even simple lists can be returned. The writer function has to be asynchronous.
 
-The writer function only has one argument- the desired number of items that QuasiQueue would like to retrieve and add to the Queue. This number is meant to allow for optimization on behalf of the developers- it can be completely ignored, but QuasiQueue will run more efficiently if you keep it as close the `desired_items` as possible.
+The writer function only has one argument- the desired number of items that QuasiQueue would like to retrieve and add to the Queue. This number is meant to allow for optimization on behalf of the developers- it can be completely ignored, but QuasiQueue will run more efficiently if you keep it as close the `desired` as possible.
 
 ```python
-async def writer(desired_items: int):
+async def writer(desired: int):
   """Feeds data to the Queue when it is low.
   """
-  return range(0, desired_items)
+  return range(0, desired)
 
 ```
 
@@ -206,7 +206,7 @@ QuasiQueue has a variety of optimization settings that can be tweaked depending 
 |  `empty_queue_sleep_time` |  float|          The time in seconds that QuasiQueue will sleep the writer process when it returns no results.          |  1.0  |
 |  `full_queue_sleep_time`  |  float|        The time in seconds that QuasiQueue will sleep the writer process if the queue is completely full.       |  5.0  |
 |`graceful_shutdown_timeout`|integer|   The time in seconds that QuasiQueue will wait for readers to finish when it is asked to gracefully shutdown.  |   30  |
-|    `lookup_block_size`    |integer|The default desired_items passed to the writer function. This will be adjusted lower depending on queue dynamics.|   10  |
+|    `lookup_block_size`    |integer|The default desired passed to the writer function. This will be adjusted lower depending on queue dynamics.|   10  |
 |   `max_jobs_per_process`  |integer|               The number of jobs a reader process will run before it is replaced by a new process.              |  200  |
 |      `max_queue_size`     |integer|                                       The max allowed size of the queue.                                        |  300  |
 |      `num_processes`      |integer|                                      The number of reader processes to run.                                     |   2   |
