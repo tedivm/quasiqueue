@@ -5,7 +5,7 @@ QuasiQueue is a MultiProcessing library for Python that makes it super easy to h
 QuasiQueue works by splitting the work into two components- the main process whose job it is to feed a Queue with work, and then read processes that take work off of the Queue to run. All the developers have to do is create two functions-
 
 * `writer` is called when the queue gets low. It should return an iterable (list, generator) that QuasiQueue uses to grow the multiprocess Queue.
-* `reader` is called once for each item in the Queue. It runs in a completely different process from the `writer`.
+* `reader` is called once for each item in the Queue. It runs in completely different processes from the `writer`.
 
 ```mermaid
 flowchart LR
@@ -145,7 +145,7 @@ async def reader(identifier: int|str):
 
 The reader can be extremely simple, as this one liner shows, or it can be extremely complex.
 
-The reader can be asynchronous or synchronous. Since each reader runs in its own process there is no performance benefits to using async, but it does make it easier for projects that use a lot of async code to reuse their existing async libraries inside of the reader.
+The reader can be asynchronous or synchronous. When the reader is an async function the `concurrent_tasks_per_process` setting can be used to control how many reader tasks will run per process. For example, if you have four processes running and allow ten concurrent tasks then the reader function will have 40 instances running. This can be beneficial if your reader function requires a lot of independent IO (such as disk writes or HTTP lookups), but if your reader is primarily running calculations then it's less likely to benefit.
 
 ### Writer
 
@@ -205,17 +205,18 @@ Although this function is not required it can have amazing performance implicati
 
 QuasiQueue has a variety of optimization settings that can be tweaked depending on usage.
 
-|            Name           |  Type |                                                   Description                                                   |Default|
-|---------------------------|-------|-----------------------------------------------------------------------------------------------------------------|-------|
-|  `empty_queue_sleep_time` |  float|          The time in seconds that QuasiQueue will sleep the writer process when it returns no results.          |  1.0  |
-|  `full_queue_sleep_time`  |  float|        The time in seconds that QuasiQueue will sleep the writer process if the queue is completely full.       |  5.0  |
-|`graceful_shutdown_timeout`|integer|   The time in seconds that QuasiQueue will wait for readers to finish when it is asked to gracefully shutdown.  |   30  |
-|    `lookup_block_size`    |integer|The default desired passed to the writer function. This will be adjusted lower depending on queue dynamics.|   10  |
-|   `max_jobs_per_process`  |integer|               The number of jobs a reader process will run before it is replaced by a new process.              |  200  |
-|      `max_queue_size`     |integer|                                       The max allowed size of the queue.                                        |  300  |
-|      `num_processes`      |integer|                                      The number of reader processes to run.                                     |   2   |
-|  `prevent_requeuing_time` |integer|               The time in seconds that an item will be prevented from being readded to the queue.               |  300  |
-|`queue_interaction_timeout`|  float|               The time QuasiQueue will wait for the Queue to be unlocked before throwing an error.              |  0.01 |
+|            Name           |  Type |                                                   Description                                                 |Default|
+|---------------------------|-------|---------------------------------------------------------------------------------------------------------------|-------|
+|  `empty_queue_sleep_time` |  float| The time in seconds that QuasiQueue will sleep the writer process when it returns no results.                 |  1.0  |
+|  `full_queue_sleep_time`  |  float| The time in seconds that QuasiQueue will sleep the writer process if the queue is completely full.            |  5.0  |
+|`graceful_shutdown_timeout`|integer| The time in seconds that QuasiQueue will wait for readers to finish when it is asked to gracefully shutdown.  |   30  |
+|    `lookup_block_size`    |integer|The default desired passed to the writer function. This will be adjusted lower depending on queue dynamics.    |   10  |
+|   `max_jobs_per_process`  |integer| The number of jobs a reader process will run before it is replaced by a new process.                          |  200  |
+| `concurrent_tasks_per_process`  |integer| How many async tasks can run at once inside a single process.                                           |    2  |
+|      `max_queue_size`     |integer| The max allowed size of the queue.                                                                            |  300  |
+|      `num_processes`      |integer| The number of reader processes to run.                                                                        |    2  |
+|  `prevent_requeuing_time` |integer| The time in seconds that an item will be prevented from being readded to the queue.                           |  300  |
+|`queue_interaction_timeout`|  float| The time QuasiQueue will wait for the Queue to be unlocked before throwing an error.                          | 0.01  |
 
 Settings can be configured programmatically, via environment variables, or both.
 
@@ -259,3 +260,13 @@ QuasiQueue(
 )
 ```
 
+### Accessing Settings
+
+The `reader`, `writer`, and `context` functions can optionally retrieve a copy of the QuasiQueue settings in use by defining a `settings` argument in their function.
+
+```python
+async def reader(item: Any, settings: Dict[str, Any])
+  print(settings['project_name'])
+```
+
+If you create a custom Settings class, as in [the programmatic example](#programmatic), you can add your own fields that will be passed to your QuasiQueue functions.

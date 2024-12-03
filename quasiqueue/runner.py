@@ -10,6 +10,8 @@ from .builder import Builder
 from .reader import reader_process
 from .settings import Settings, get_named_settings
 
+logger = logging.getLogger(__name__)
+
 
 class QueueRunner(object):
     def __init__(
@@ -46,14 +48,15 @@ class QueueRunner(object):
             # Inline function to implicitly pass through shutdown_event.
             def shutdown(a=None, b=None):
                 if a is not None:
-                    logging.debug(f"Signal {a} caught.")
+                    logger.debug(f"Signal {a} caught.")
 
                 # Send shutdown signal to all processes.
                 shutdown_event.set()
 
                 # Graceful shutdown- wait for children to shut down.
                 if a == 15 or a is None:
-                    logging.debug("Gracefully shutting down child processes.")
+                    logger.debug("Gracefully shutting down child processes.")
+                    logger.debug(self.settings.graceful_shutdown_timeout)
                     shutdown_start = time.time()
                     while len(psutil.Process().children()) > 0:
                         if time.time() > (shutdown_start + self.settings.graceful_shutdown_timeout):
@@ -63,7 +66,7 @@ class QueueRunner(object):
                 # Kill any remaining processes directly, not counting on variables.
                 remaining_processes = psutil.Process().children()
                 if len(remaining_processes) > 0:
-                    logging.debug("Terminating remaining child processes.")
+                    logger.debug("Terminating remaining child processes.")
                     for process in remaining_processes:
                         process.terminate()
 
@@ -86,13 +89,15 @@ class QueueRunner(object):
 
                     # Populate Queue
                     if not await queue_builder.populate():
-                        logging.debug("Queue unable to populate: sleeping scheduler.")
+                        logger.debug("Queue unable to populate: sleeping scheduler.")
                         time.sleep(self.settings.full_queue_sleep_time)
                     else:
                         # Small sleep between populate attempts to prevent CPU/database pegging.
                         time.sleep(0.05)
             finally:
+                logger.warning("Shutting down all processes.")
                 shutdown()
+                logger.warning("All processes shut down.")
 
     def launch_process(self, import_queue, shutdown_event) -> mp.Process:
         process = mp.Process(
@@ -102,11 +107,11 @@ class QueueRunner(object):
                 shutdown_event,
                 self.reader,
                 self.context,
-                self.settings.dict(),
+                self.settings.model_dump(),
             ),
         )
         process.name = f"worker_{self.worker_launches:03d}"
         self.worker_launches += 1
-        logging.debug(f"Launching worker {process.name}")
+        logger.debug(f"Launching worker {process.name}")
         process.daemon = True
         return process

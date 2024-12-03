@@ -1,6 +1,9 @@
-import logging
+import inspect
 import time
+from logging import getLogger
 from queue import Full
+
+logger = getLogger(__name__)
 
 
 class Builder:
@@ -11,9 +14,15 @@ class Builder:
         self.last_queued = {}
         self.writer = writer
         self.closed = False
+        self.writer_args = inspect.getfullargspec(self.writer).args
 
     async def populate(self, max=50):
         self.clean_history()
+
+        writer_kw_args = {}
+
+        if "settings" in self.writer_args:
+            writer_kw_args["settings"] = self.settings
 
         # Writers can be expensive but cheaper when pulling bulk records.
         queue_size = self.queue.qsize()
@@ -23,8 +32,12 @@ class Builder:
         # Don't try to fill the queue 100% since the queue size isn't always accurate.
         count = min(int(self.settings.max_queue_size * 0.8) - queue_size, max)
         blocksize = min(self.settings.lookup_block_size, count)
+
+        if "desired" in self.writer_args:
+            writer_kw_args["desired"] = blocksize
+
         if count <= 0:
-            logging.debug("Skipping queue population due to max queue size.")
+            logger.debug("Skipping queue population due to max queue size.")
             return False
         try:
             successful_adds = 0
@@ -35,29 +48,26 @@ class Builder:
                     self.queue.put("close", True, self.settings.queue_interaction_timeout)
                 return False
 
-            async for id in self.writer(desired=blocksize):
+            async for id in self.writer(**writer_kw_args):
                 if id is None or id is False:
-                    logging.debug(f"Returning False {id}")
+                    logger.debug(f"Returning False {id}")
                     return False
                 if self.add_to_queue(id):
-                    logging.debug(f"Added {id} to queue.")
+                    logger.debug(f"Added {id} to queue.")
                     successful_adds += 1
                     if successful_adds >= max:
                         return True
         except Full:
-            logging.debug("Queue has reached max size.")
+            logger.debug("Queue has reached max size.")
             return False
 
     def add_to_queue(self, id):
         if id in self.last_queued:
-            logging.debug(f"ID {id} is in last_queued")
-            logging.debug(time.time())
-            logging.debug(self.last_queued[id] + self.settings.prevent_requeuing_time)
-
+            logger.debug(f"ID {id} is in last_queued")
             if self.last_queued[id] + self.settings.prevent_requeuing_time > time.time():
-                logging.debug(f"Skipping {id}: added too recently.")
+                logger.debug(f"Skipping {id}: added too recently.")
                 return False
-        logging.debug(f"Adding {id} to queue.")
+        logger.debug(f"Adding {id} to queue.")
         self.last_queued[id] = time.time()
         self.queue.put(id, True, self.settings.queue_interaction_timeout)
         return True

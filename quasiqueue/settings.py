@@ -35,6 +35,10 @@ class Settings(BaseSettings):
         default=200,
         description="The number of jobs a reader process will run before it is replaced by a new process.",
     )
+    concurrent_tasks_per_process: int = Field(
+        default=4,
+        description="The number of async tasks a reader process will run concurrently.",
+    )
 
 
 def get_named_settings(name: str) -> Settings:
