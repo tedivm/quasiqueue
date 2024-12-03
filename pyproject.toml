@@ -24,6 +24,7 @@ dev = [
   "glom",
   "mypy",
   "pytest",
+  "pytest-asyncio",
   "pytest-cov",
   "pytest-pretty",
   "ruamel.yaml",
@@ -51,3 +52,17 @@ find = {}
 [tool.setuptools_scm]
 fallback_version = "0.0.0-dev"
 write_to = "quasiqueue/_version.py"
+
+[tool.coverage.run]
+concurrency = ["multiprocessing"]
+omit = [
+  "quasiqueue/__init__.py",
+  "quasiqueue/_version.py",
+  "quasiqueue/cli.py",
+  "tests/*",
+]
+parallel = true
+sigterm = true
+
+[tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "function"
