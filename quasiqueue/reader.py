@@ -2,7 +2,6 @@ import asyncio
 import inspect
 import logging
 import multiprocessing as mp
-import time
 from multiprocessing.synchronize import Event
 from queue import Empty
 from typing import Any, Callable, Dict, List
@@ -17,6 +16,9 @@ def reader_process(
     context: Callable[[], Dict[str, Any]] | None,
     settings: Dict[str, Any],
 ) -> None:
+    # Ensure child workers can emit logs before starting the async loop.
+    if not logging.getLogger().handlers:
+        logging.basicConfig()
     asyncio.run(reader_runner(queue, shutdown_event, reader, context, settings))
 
 
@@ -35,11 +37,13 @@ async def reader_runner(
     jobs_run = 0
 
     parent_process = mp.parent_process()
-    if not parent_process:
+    # This entrypoint is only valid inside a child process.
+    if parent_process is None:
         raise ValueError("Function should be called as a child process.")
 
     ctx = None
     if context:
+        # Let context providers opt into settings without changing older call signatures.
         context_args = inspect.getfullargspec(context).args
         context_kw_args = {}
         if "settings" in context_args:
@@ -53,12 +57,15 @@ async def reader_runner(
     running_tasks: List[asyncio.Task] = []
     reader_args = inspect.getfullargspec(reader).args
 
+    # The loop condition is the primary shutdown path.
     while not shutdown_event.is_set() and parent_process.is_alive():
         try:
             item = queue.get(True, settings["queue_interaction_timeout"])
             if item == "close":
+                # Also honor queue-level shutdown sentinels.
                 break
 
+            # Adapt kwargs to the reader's supported signature.
             reader_kw_args = {"item": item}
 
             if ctx:
@@ -69,11 +76,13 @@ async def reader_runner(
                 reader_kw_args["settings"] = settings
 
             if inspect.iscoroutinefunction(reader):
+                # Bound async fan-out per worker process.
                 running_tasks = _prune_tasks(running_tasks)
                 while len(running_tasks) >= settings["concurrent_tasks_per_process"]:
                     await asyncio.sleep(0.01)
                     running_tasks = _prune_tasks(running_tasks)
                 running_tasks.append(asyncio.create_task(reader(**reader_kw_args)))  # type: ignore
+                await asyncio.sleep(0)
             else:
                 reader(**reader_kw_args)  # type: ignore
 
@@ -85,8 +94,10 @@ async def reader_runner(
 
         except Empty:
             logger.debug(f"{PROCESS_NAME} has no jobs to process, sleeping.")
-            time.sleep(settings["empty_queue_sleep_time"])
+            # Back off without blocking in-flight async tasks.
+            await asyncio.sleep(settings["empty_queue_sleep_time"])
             continue
 
     if running_tasks:
-        asyncio.gather(*running_tasks)
+        # Finish accepted async work before the worker exits.
+        await asyncio.gather(*running_tasks, return_exceptions=True)

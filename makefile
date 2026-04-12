@@ -56,7 +56,7 @@ chores: ruff_fixes black_fixes dapperdata_fixes
 
 .PHONY: ruff_fixes
 ruff_fixes:
-	$(PYTHON) -m ruff . --fix
+	$(PYTHON) -m ruff check . --fix
 
 .PHONY: black_fixes
 black_fixes:
