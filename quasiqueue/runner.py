@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import multiprocessing as mp
 import signal
@@ -14,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 
 class QueueRunner(object):
+    """Coordinate queue creation, worker supervision, and shutdown behavior."""
+
     def __init__(
         self,
         name: str,
@@ -39,68 +42,87 @@ class QueueRunner(object):
         self.worker_launches = 0
 
     async def main(self) -> None:
-        """Creates the Queue Management Loop"""
-        with mp.Manager() as manager:
-            import_queue = manager.Queue(self.settings.max_queue_size)
-            queue_builder = Builder(import_queue, self.settings, self.writer)
-            shutdown_event = manager.Event()
+        """Run the parent process that supervises workers and queue population."""
+        # Use fork explicitly so that worker callables (including locally-defined
+        # functions) do not need to be picklable. Python 3.14 changed the default
+        # start method on Linux to forkserver, which requires pickling all process
+        # arguments; fork inherits the parent's address space and avoids that.
+        ctx = mp.get_context("fork")
+        import_queue: mp.Queue = ctx.Queue(self.settings.max_queue_size)
+        queue_builder = Builder(import_queue, self.settings, self.writer)
+        shutdown_event = ctx.Event()
 
+        def shutdown(a=None, b=None):
             # Inline function to implicitly pass through shutdown_event.
-            def shutdown(a=None, b=None):
-                if a is not None:
-                    logger.debug(f"Signal {a} caught.")
+            if a is not None:
+                logger.debug(f"Signal {a} caught.")
 
-                # Send shutdown signal to all processes.
-                shutdown_event.set()
+            # Send shutdown signal to all processes.
+            shutdown_event.set()
 
-                # Graceful shutdown- wait for children to shut down.
-                if a == 15 or a is None:
-                    logger.debug("Gracefully shutting down child processes.")
-                    logger.debug(self.settings.graceful_shutdown_timeout)
-                    shutdown_start = time.time()
-                    while len(psutil.Process().children()) > 0:
-                        if time.time() > (shutdown_start + self.settings.graceful_shutdown_timeout):
-                            break
-                        time.sleep(0.05)
+            # Graceful shutdown- wait for children to shut down.
+            if a == 15 or a is None:
+                logger.debug("Gracefully shutting down child processes.")
+                logger.debug(self.settings.graceful_shutdown_timeout)
+                shutdown_start = time.time()
+                while len(psutil.Process().children()) > 0:
+                    if time.time() > (shutdown_start + self.settings.graceful_shutdown_timeout):
+                        break
+                    time.sleep(0.05)
 
-                # Kill any remaining processes directly, not counting on variables.
-                remaining_processes = psutil.Process().children()
-                if len(remaining_processes) > 0:
-                    logger.debug("Terminating remaining child processes.")
-                    for process in remaining_processes:
-                        process.terminate()
+            # Kill any remaining processes directly, not counting on variables.
+            remaining_processes = psutil.Process().children()
+            if len(remaining_processes) > 0:
+                logger.debug("Terminating remaining child processes.")
+                for process in remaining_processes:
+                    process.terminate()
 
-            # Set shutdown function as signal handler for SIGINT and SIGTERM.
-            signal.signal(signal.SIGINT, shutdown)
-            signal.signal(signal.SIGTERM, shutdown)
+        # Set shutdown function as signal handler for SIGINT and SIGTERM.
+        signal.signal(signal.SIGINT, shutdown)
+        signal.signal(signal.SIGTERM, shutdown)
 
+        try:
             # Now start actual script.
-            try:
-                processes: List[mp.Process] = []
-                while not shutdown_event.is_set():
-                    # Prune dead processes
-                    processes = [x for x in processes if x.is_alive()]
+            processes: List[mp.process.BaseProcess] = []
+            while not shutdown_event.is_set():
+                # Prune dead processes
+                processes = [x for x in processes if x.is_alive()]
 
-                    # Bring process list up to size
-                    while len(processes) < self.settings.num_processes:
-                        process = self.launch_process(import_queue, shutdown_event)
-                        processes.append(process)
-                        process.start()
+                # Bring process list up to size
+                new_processes = 0
+                while len(processes) < self.settings.num_processes:
+                    process = self.launch_process(import_queue, shutdown_event)
+                    processes.append(process)
+                    process.start()
+                    new_processes += 1
 
-                    # Populate Queue
-                    if not await queue_builder.populate():
-                        logger.debug("Queue unable to populate: sleeping scheduler.")
-                        time.sleep(self.settings.full_queue_sleep_time)
-                    else:
-                        # Small sleep between populate attempts to prevent CPU/database pegging.
-                        time.sleep(0.05)
-            finally:
-                logger.warning("Shutting down all processes.")
-                shutdown()
-                logger.warning("All processes shut down.")
+                if new_processes:
+                    # Give newly-started workers time to initialize and begin
+                    # blocking on queue.get() before we fill the queue, so that
+                    # items are distributed fairly across all workers rather than
+                    # being consumed entirely by whichever process starts first.
+                    await asyncio.sleep(0.1)
 
-    def launch_process(self, import_queue, shutdown_event) -> mp.Process:
-        process = mp.Process(
+                # Populate Queue
+                if not await queue_builder.populate():
+                    logger.debug("Queue unable to populate: sleeping scheduler.")
+                    await asyncio.sleep(self.settings.full_queue_sleep_time)
+                else:
+                    # Small sleep between populate attempts to prevent CPU/database pegging.
+                    await asyncio.sleep(0.05)
+        finally:
+            logger.warning("Shutting down all processes.")
+            shutdown()
+            # Explicitly close the queue now that the parent owns its
+            # lifecycle directly instead of delegating it to a Manager.
+            import_queue.close()
+            import_queue.join_thread()
+            logger.warning("All processes shut down.")
+
+    def launch_process(self, import_queue, shutdown_event) -> mp.process.BaseProcess:
+        """Create one worker process with the queue contract it will consume."""
+        ctx = mp.get_context("fork")
+        process = ctx.Process(
             target=reader_process,
             args=(
                 import_queue,
