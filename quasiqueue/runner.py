@@ -43,11 +43,14 @@ class QueueRunner(object):
 
     async def main(self) -> None:
         """Run the parent process that supervises workers and queue population."""
-        # QuasiQueue spawns its workers directly and only shares a queue plus
-        # a shutdown signal, so raw multiprocessing primitives are sufficient.
-        import_queue: mp.Queue = mp.Queue(self.settings.max_queue_size)
+        # Use fork explicitly so that worker callables (including locally-defined
+        # functions) do not need to be picklable. Python 3.14 changed the default
+        # start method on Linux to forkserver, which requires pickling all process
+        # arguments; fork inherits the parent's address space and avoids that.
+        _ctx = mp.get_context("fork")
+        import_queue: mp.Queue = _ctx.Queue(self.settings.max_queue_size)
         queue_builder = Builder(import_queue, self.settings, self.writer)
-        shutdown_event = mp.Event()
+        shutdown_event = _ctx.Event()
 
         def shutdown(a=None, b=None):
             # Inline function to implicitly pass through shutdown_event.
@@ -86,10 +89,19 @@ class QueueRunner(object):
                 processes = [x for x in processes if x.is_alive()]
 
                 # Bring process list up to size
+                new_processes = 0
                 while len(processes) < self.settings.num_processes:
                     process = self.launch_process(import_queue, shutdown_event)
                     processes.append(process)
                     process.start()
+                    new_processes += 1
+
+                if new_processes:
+                    # Give newly-started workers time to initialize and begin
+                    # blocking on queue.get() before we fill the queue, so that
+                    # items are distributed fairly across all workers rather than
+                    # being consumed entirely by whichever process starts first.
+                    await asyncio.sleep(0.1)
 
                 # Populate Queue
                 if not await queue_builder.populate():
@@ -109,7 +121,8 @@ class QueueRunner(object):
 
     def launch_process(self, import_queue, shutdown_event) -> mp.Process:
         """Create one worker process with the queue contract it will consume."""
-        process = mp.Process(
+        _ctx = mp.get_context("fork")
+        process = _ctx.Process(
             target=reader_process,
             args=(
                 import_queue,

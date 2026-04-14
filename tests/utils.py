@@ -12,6 +12,10 @@ logger = logging.getLogger(__name__)
 
 class QuickTestSettings(Settings):
     graceful_shutdown_timeout: float = 0.2
+    # Retry the queue quickly so that workers don't miss items added shortly
+    # after startup (the runner waits 0.1 s for workers to initialize before
+    # filling the queue, which would otherwise exceed the default 1 s backoff).
+    empty_queue_sleep_time: float = 0.05
     save_dir: str
 
 
