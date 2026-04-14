@@ -47,10 +47,10 @@ class QueueRunner(object):
         # functions) do not need to be picklable. Python 3.14 changed the default
         # start method on Linux to forkserver, which requires pickling all process
         # arguments; fork inherits the parent's address space and avoids that.
-        _ctx = mp.get_context("fork")
-        import_queue: mp.Queue = _ctx.Queue(self.settings.max_queue_size)
+        ctx = mp.get_context("fork")
+        import_queue: mp.Queue = ctx.Queue(self.settings.max_queue_size)
         queue_builder = Builder(import_queue, self.settings, self.writer)
-        shutdown_event = _ctx.Event()
+        shutdown_event = ctx.Event()
 
         def shutdown(a=None, b=None):
             # Inline function to implicitly pass through shutdown_event.
@@ -121,8 +121,8 @@ class QueueRunner(object):
 
     def launch_process(self, import_queue, shutdown_event) -> mp.Process:
         """Create one worker process with the queue contract it will consume."""
-        _ctx = mp.get_context("fork")
-        process = _ctx.Process(
+        ctx = mp.get_context("fork")
+        process = ctx.Process(
             target=reader_process,
             args=(
                 import_queue,
