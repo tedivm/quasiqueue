@@ -2,6 +2,7 @@ name: Ruff Validation
 
 on:
   push:
+  pull_request:
 
 jobs:
   ruff:
