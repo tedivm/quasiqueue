@@ -83,7 +83,7 @@ class QueueRunner(object):
 
         try:
             # Now start actual script.
-            processes: List[mp.Process] = []
+            processes: List[mp.process.BaseProcess] = []
             while not shutdown_event.is_set():
                 # Prune dead processes
                 processes = [x for x in processes if x.is_alive()]
@@ -119,7 +119,7 @@ class QueueRunner(object):
             import_queue.join_thread()
             logger.warning("All processes shut down.")
 
-    def launch_process(self, import_queue, shutdown_event) -> mp.Process:
+    def launch_process(self, import_queue, shutdown_event) -> mp.process.BaseProcess:
         """Create one worker process with the queue contract it will consume."""
         ctx = mp.get_context("fork")
         process = ctx.Process(
