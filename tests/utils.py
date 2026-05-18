@@ -16,6 +16,8 @@ class QuickTestSettings(Settings):
     # after startup (the runner waits 0.1 s for workers to initialize before
     # filling the queue, which would otherwise exceed the default 1 s backoff).
     empty_queue_sleep_time: float = 0.05
+    full_queue_sleep_min: float = 0.05
+    full_queue_sleep_max: float = 0.05
     save_dir: str
 
 
