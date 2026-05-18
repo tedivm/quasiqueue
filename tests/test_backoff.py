@@ -17,9 +17,9 @@ def test_backoff_progression():
     for i in range(1, 8):
         b.full_consecutive = i
         expected = min(1.0 * (2 ** (i - 1)), 90.0)
-        assert (
-            b.full_queue_sleep_time() == expected
-        ), f"consecutive={i}, expected={expected}, got={b.full_queue_sleep_time()}"
+        assert b.full_queue_sleep_time() == expected, (
+            f"consecutive={i}, expected={expected}, got={b.full_queue_sleep_time()}"
+        )
 
 
 def test_backoff_reset_on_zero():
