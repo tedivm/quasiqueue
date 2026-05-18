@@ -14,6 +14,9 @@ class Builder:
         self.last_queued = {}
         self.writer = writer
         self.closed = False
+        self.exhausted = False
+        self.empty_count = 0
+        self.full_consecutive = 0
         self.writer_args = inspect.getfullargspec(self.writer).args
 
     async def populate(self, max=50):
@@ -24,12 +27,15 @@ class Builder:
         if "settings" in self.writer_args:
             writer_kw_args["settings"] = self.settings
 
-        # Writers can be expensive but cheaper when pulling bulk records.
-        queue_size = self.queue.qsize()
+        try:
+            queue_size = self.queue.qsize()
+        except NotImplementedError:
+            queue_size = 0
         if queue_size >= self.settings.max_queue_size * 0.3:
+            self.empty_count = 0
+            self.full_consecutive = 0
             return True
 
-        # Don't try to fill the queue 100% since the queue size isn't always accurate.
         count = min(int(self.settings.max_queue_size * 0.8) - queue_size, max)
         blocksize = min(self.settings.lookup_block_size, count)
 
@@ -38,11 +44,11 @@ class Builder:
 
         if count <= 0:
             logger.debug("Skipping queue population due to max queue size.")
+            self.full_consecutive += 1
             return False
         try:
             successful_adds = 0
 
-            # If the queue is closed tell the children processes to close.
             if self.closed:
                 for i in range(0, blocksize):
                     self.queue.put("close", True, self.settings.queue_interaction_timeout)
@@ -51,14 +57,30 @@ class Builder:
             async for id in self.writer(**writer_kw_args):
                 if id is None or id is False:
                     logger.debug(f"Returning False {id}")
+                    self.empty_count += 1
+                    self.full_consecutive += 1
+                    if self.empty_count >= self.settings.empty_queue_sleep_time:
+                        self.exhausted = True
                     return False
                 if self.add_to_queue(id):
                     logger.debug(f"Added {id} to queue.")
                     successful_adds += 1
+                    self.empty_count = 0
+                    self.full_consecutive = 0
                     if successful_adds >= max:
                         return True
+
+            if successful_adds == 0:
+                self.empty_count += 1
+                self.full_consecutive += 1
+                if self.empty_count >= self.settings.empty_queue_sleep_time:
+                    self.exhausted = True
+                return False
+
+            return True
         except Full:
             logger.debug("Queue has reached max size.")
+            self.full_consecutive += 1
             return False
 
     def add_to_queue(self, id):
@@ -74,12 +96,23 @@ class Builder:
 
     def clean_history(self):
         self.last_queued = {
-            # Keep item as long as that item expires in the future. Items which have already expired will be removed.
-            k: v
-            for k, v in self.last_queued.items()
-            if v + self.settings.prevent_requeuing_time > time.time()
+            k: v for k, v in self.last_queued.items() if v + self.settings.prevent_requeuing_time > time.time()
         }
 
     def close(self):
-        if self.closed:
-            return False
+        self.closed = True
+        blocksize = self.settings.lookup_block_size
+        for _ in range(0, blocksize):
+            try:
+                self.queue.put("close", True, self.settings.queue_interaction_timeout)
+            except Full:
+                break
+        return True
+
+    def full_queue_sleep_time(self) -> float:
+        if self.full_consecutive == 0:
+            return self.settings.full_queue_sleep_min
+        return min(
+            self.settings.full_queue_sleep_min * (2 ** (self.full_consecutive - 1)),
+            self.settings.full_queue_sleep_max,
+        )

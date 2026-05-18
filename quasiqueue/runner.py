@@ -41,54 +41,56 @@ class QueueRunner(object):
         self.context = context
         self.worker_launches = 0
 
-    async def main(self) -> None:
-        """Run the parent process that supervises workers and queue population."""
-        # Use fork explicitly so that worker callables (including locally-defined
-        # functions) do not need to be picklable. Python 3.14 changed the default
-        # start method on Linux to forkserver, which requires pickling all process
-        # arguments; fork inherits the parent's address space and avoids that.
-        ctx = mp.get_context("fork")
-        import_queue: mp.Queue = ctx.Queue(self.settings.max_queue_size)
-        queue_builder = Builder(import_queue, self.settings, self.writer)
-        shutdown_event = ctx.Event()
+    def setup_signals(self, shutdown_event: mp.synchronize.Event) -> None:
+        """Register signal handlers on the given event.
+
+        Safe to call multiple times — each call attaches the same handler
+        logic to the same event, so multiple QueueRunners can share a
+        single shutdown_event for coordinated teardown.
+
+        Args:
+            shutdown_event: A multiprocessing Event that will be set when
+                SIGINT or SIGTERM is received.
+        """
 
         def shutdown(a=None, b=None):
-            # Inline function to implicitly pass through shutdown_event.
             if a is not None:
-                logger.debug(f"Signal {a} caught.")
+                logger.debug(f"[{self.name}] Signal {a} caught.")
 
-            # Send shutdown signal to all processes.
             shutdown_event.set()
 
-            # Graceful shutdown- wait for children to shut down.
             if a == 15 or a is None:
                 logger.debug("Gracefully shutting down child processes.")
-                logger.debug(self.settings.graceful_shutdown_timeout)
                 shutdown_start = time.time()
                 while len(psutil.Process().children()) > 0:
                     if time.time() > (shutdown_start + self.settings.graceful_shutdown_timeout):
                         break
                     time.sleep(0.05)
 
-            # Kill any remaining processes directly, not counting on variables.
             remaining_processes = psutil.Process().children()
             if len(remaining_processes) > 0:
                 logger.debug("Terminating remaining child processes.")
                 for process in remaining_processes:
                     process.terminate()
 
-        # Set shutdown function as signal handler for SIGINT and SIGTERM.
         signal.signal(signal.SIGINT, shutdown)
         signal.signal(signal.SIGTERM, shutdown)
 
+    async def _run_loop(self, shutdown_event: mp.synchronize.Event) -> None:
+        """Per-queue async loop: spawn workers, populate queue, prune dead processes.
+
+        Args:
+            shutdown_event: Event that signals the loop to exit.
+        """
+        ctx = mp.get_context("fork")
+        import_queue: mp.Queue = ctx.Queue(self.settings.max_queue_size)
+        queue_builder = Builder(import_queue, self.settings, self.writer)
+
         try:
-            # Now start actual script.
             processes: List[mp.process.BaseProcess] = []
             while not shutdown_event.is_set():
-                # Prune dead processes
                 processes = [x for x in processes if x.is_alive()]
 
-                # Bring process list up to size
                 new_processes = 0
                 while len(processes) < self.settings.num_processes:
                     process = self.launch_process(import_queue, shutdown_event)
@@ -97,27 +99,32 @@ class QueueRunner(object):
                     new_processes += 1
 
                 if new_processes:
-                    # Give newly-started workers time to initialize and begin
-                    # blocking on queue.get() before we fill the queue, so that
-                    # items are distributed fairly across all workers rather than
-                    # being consumed entirely by whichever process starts first.
                     await asyncio.sleep(0.1)
 
-                # Populate Queue
                 if not await queue_builder.populate():
-                    logger.debug("Queue unable to populate: sleeping scheduler.")
-                    await asyncio.sleep(self.settings.full_queue_sleep_time)
+                    logger.debug(f"[{self.name}] Queue unable to populate: sleeping scheduler.")
+                    await asyncio.sleep(queue_builder.full_queue_sleep_time())
                 else:
-                    # Small sleep between populate attempts to prevent CPU/database pegging.
                     await asyncio.sleep(0.05)
         finally:
-            logger.warning("Shutting down all processes.")
-            shutdown()
-            # Explicitly close the queue now that the parent owns its
-            # lifecycle directly instead of delegating it to a Manager.
+            logger.warning(f"[{self.name}] Shutting down all processes.")
             import_queue.close()
             import_queue.join_thread()
-            logger.warning("All processes shut down.")
+            logger.warning(f"[{self.name}] All processes shut down.")
+
+    async def main(self) -> None:
+        """Run the parent process that supervises workers and queue population.
+
+        Backward-compatible entry point — sets up signals and runs the loop.
+        """
+        ctx = mp.get_context("fork")
+        shutdown_event = ctx.Event()
+        self.setup_signals(shutdown_event)
+
+        try:
+            await self._run_loop(shutdown_event)
+        finally:
+            shutdown_event.set()
 
     def launch_process(self, import_queue, shutdown_event) -> mp.process.BaseProcess:
         """Create one worker process with the queue contract it will consume."""
@@ -137,3 +144,26 @@ class QueueRunner(object):
         logger.debug(f"Launching worker {process.name}")
         process.daemon = True
         return process
+
+
+def run_queues(*runners: QueueRunner) -> None:
+    """Run multiple QueueRunner instances in a single event loop.
+
+    All runners share a single shutdown event and signal handler. When
+    SIGINT or SIGTERM is received, every queue loop exits together.
+
+    Args:
+        *runners: Two or more QueueRunner instances to run concurrently.
+    """
+    ctx = mp.get_context("fork")
+    shutdown_event = ctx.Event()
+
+    runners[0].setup_signals(shutdown_event)
+
+    async def _run_all():
+        try:
+            await asyncio.gather(*[runner._run_loop(shutdown_event) for runner in runners])
+        finally:
+            shutdown_event.set()
+
+    asyncio.run(_run_all())
