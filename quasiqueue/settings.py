@@ -17,7 +17,15 @@ class Settings(BaseSettings):
     )
     full_queue_sleep_time: float = Field(
         default=5.00,
-        description="The time in seconds that QuasiQueue will sleep the writer process if the queue is completely full.",
+        description="Legacy. Use full_queue_sleep_min and full_queue_sleep_max instead.",
+    )
+    full_queue_sleep_min: float = Field(
+        default=1.0,
+        description="Minimum seconds to sleep after a full-queue failure (backoff starts here).",
+    )
+    full_queue_sleep_max: float = Field(
+        default=90.0,
+        description="Maximum seconds to sleep after consecutive full-queue failures.",
     )
     queue_interaction_timeout: float = Field(
         default=0.01,

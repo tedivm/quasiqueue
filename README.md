@@ -4,8 +4,8 @@ QuasiQueue is a MultiProcessing library for Python that makes it super easy to h
 
 QuasiQueue works by splitting the work into two components- the main process whose job it is to feed a Queue with work, and then read processes that take work off of the Queue to run. All the developers have to do is create two functions-
 
-* `writer` is called when the queue gets low. It should return an iterable (list, generator) that QuasiQueue uses to grow the multiprocess Queue.
-* `reader` is called once for each item in the Queue. It runs in completely different processes from the `writer`.
+- `writer` is called when the queue gets low. It should return an iterable (list, generator) that QuasiQueue uses to grow the multiprocess Queue.
+- `reader` is called once for each item in the Queue. It runs in completely different processes from the `writer`.
 
 ```mermaid
 flowchart LR
@@ -76,7 +76,6 @@ flowchart LR
   end
 ```
 
-
 ### Website Image Crawler
 
 QuasiQueue could be used to crawl a website, or series of websites, to download data.
@@ -115,13 +114,11 @@ flowchart LR
   reader1(reader)-->ProcessedFiles
 ```
 
-
 ## Installation
 
 ```bash
 pip install quasiqueue
 ```
-
 
 ## Arguments
 
@@ -205,18 +202,20 @@ Although this function is not required it can have amazing performance implicati
 
 QuasiQueue has a variety of optimization settings that can be tweaked depending on usage.
 
-|            Name           |  Type |                                                   Description                                                 |Default|
-|---------------------------|-------|---------------------------------------------------------------------------------------------------------------|-------|
-|  `empty_queue_sleep_time` |  float| The time in seconds that QuasiQueue will sleep the writer process when it returns no results.                 |  1.0  |
-|  `full_queue_sleep_time`  |  float| The time in seconds that QuasiQueue will sleep the writer process if the queue is completely full.            |  5.0  |
-|`graceful_shutdown_timeout`|integer| The time in seconds that QuasiQueue will wait for readers to finish when it is asked to gracefully shutdown.  |   30  |
-|    `lookup_block_size`    |integer|The default desired passed to the writer function. This will be adjusted lower depending on queue dynamics.    |   10  |
-|   `max_jobs_per_process`  |integer| The number of jobs a reader process will run before it is replaced by a new process.                          |  200  |
-| `concurrent_tasks_per_process`  |integer| How many async tasks can run at once inside a single process.                                           |    2  |
-|      `max_queue_size`     |integer| The max allowed size of the queue.                                                                            |  300  |
-|      `num_processes`      |integer| The number of reader processes to run.                                                                        |    2  |
-|  `prevent_requeuing_time` |integer| The time in seconds that an item will be prevented from being readded to the queue.                           |  300  |
-|`queue_interaction_timeout`|  float| The time QuasiQueue will wait for the Queue to be unlocked before throwing an error.                          | 0.01  |
+| Name                           | Type    | Description                                                                                                  | Default |
+| ------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------ | ------- |
+| `empty_queue_sleep_time`       | float   | The time in seconds that QuasiQueue will sleep the writer process when it returns no results.                | 1.0     |
+| `full_queue_sleep_time`        | float   | Legacy. Use `full_queue_sleep_min` and `full_queue_sleep_max` instead.                                       | 5.0     |
+| `full_queue_sleep_min`         | float   | Minimum seconds to sleep after a full-queue failure (exponential backoff starts here).                       | 1.0     |
+| `full_queue_sleep_max`         | float   | Maximum seconds to sleep after consecutive full-queue failures (backoff caps here).                          | 90.0    |
+| `graceful_shutdown_timeout`    | integer | The time in seconds that QuasiQueue will wait for readers to finish when it is asked to gracefully shutdown. | 30      |
+| `lookup_block_size`            | integer | The default desired passed to the writer function. This will be adjusted lower depending on queue dynamics.  | 10      |
+| `max_jobs_per_process`         | integer | The number of jobs a reader process will run before it is replaced by a new process.                         | 200     |
+| `concurrent_tasks_per_process` | integer | How many async tasks can run at once inside a single process.                                                | 4       |
+| `max_queue_size`               | integer | The max allowed size of the queue.                                                                           | 300     |
+| `num_processes`                | integer | The number of reader processes to run.                                                                       | 2       |
+| `prevent_requeuing_time`       | integer | The time in seconds that an item will be prevented from being readded to the queue.                          | 300     |
+| `queue_interaction_timeout`    | float   | The time QuasiQueue will wait for the Queue to be unlocked before throwing an error.                         | 0.01    |
 
 Settings can be configured programmatically, via environment variables, or both.
 
@@ -243,7 +242,6 @@ QuasiQueue(
 
 This method is simple, but the downside is that you lose the environment variable prefixes. So when using this method you have to set `NUM_PROCESSES` rather than `MYQUEUE_NUM_PROCESSES`. The work around is to extend the Settings object to give it your desired prefix.
 
-
 ```python
 from quasiqueue import Settings, QuasiQueue
 from pydantic_settings import SettingsConfigDict
@@ -259,6 +257,69 @@ QuasiQueue(
   settings=MySettings()
 )
 ```
+
+#### Advanced: Multiple Queues
+
+You can run multiple queues concurrently in a single process using `run_queues()`. Each queue has its own writer, reader, and worker processes, but they share a single signal handler for coordinated shutdown.
+
+```python
+import asyncio
+
+from quasiqueue import QuasiQueue, run_queues
+
+
+async def image_writer(desired: int):
+  for i in range(desired):
+    yield f"image_{i}"
+
+async def audio_writer(desired: int):
+  for i in range(desired):
+    yield f"audio_{i}"
+
+async def process_image(item: int | str):
+  print(f"Processing image: {item}")
+
+async def process_audio(item: int | str):
+  print(f"Processing audio: {item}")
+
+runner_a = QuasiQueue("images", reader=process_image, writer=image_writer)
+runner_b = QuasiQueue("audio",  reader=process_audio,  writer=audio_writer)
+
+if __name__ == '__main__':
+  run_queues(runner_a, runner_b)
+```
+
+When `run_queues()` is called, both queues run in the same event loop. If the process receives a `SIGINT` or `SIGTERM`, both queues shut down together.
+
+#### Advanced: Custom Event Loop
+
+For more control, you can use `_run_loop()` directly with your own event loop:
+
+```python
+import asyncio
+import multiprocessing as mp
+
+from quasiqueue import QuasiQueue
+
+runner_a = QuasiQueue("images", reader=process_image, writer=image_writer)
+runner_b = QuasiQueue("audio",  reader=process_audio,  writer=audio_writer)
+
+ctx = mp.get_context("fork")
+shutdown_event = ctx.Event()
+runner_a.setup_signals(shutdown_event)
+
+async def custom_loop():
+  await asyncio.gather(
+    runner_a._run_loop(shutdown_event),
+    runner_b._run_loop(shutdown_event),
+  )
+
+asyncio.run(custom_loop)
+```
+
+#### Advanced: Builder and reader_process
+
+`Builder` and `reader_process` are exported for custom orchestration outside of `QueueRunner`.
 
 ### Accessing Settings
 
